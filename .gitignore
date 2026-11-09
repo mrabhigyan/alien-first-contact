@@ -17,3 +17,6 @@ __pycache__/
 Thumbs.db
 .DS_Store
 logs/
+.cache/
+*.db-wal
+*.db-shm

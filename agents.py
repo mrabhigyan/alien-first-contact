@@ -56,6 +56,10 @@ class Brain(Protocol):
     def ask(self, system: str, prompt: str, schema: type[T]) -> T: ...
 
 
+class SpendingCapReached(RuntimeError):
+    """The API project's spending cap is exhausted; retrying cannot help."""
+
+
 def _network_errors() -> tuple[type[BaseException], ...]:
     """Connection/timeout errors worth retrying. The HTTP library google-genai uses
     has changed between versions (httpx, httpx2), so look it up instead of hard-coding it."""
@@ -101,6 +105,14 @@ class GeminiBrain:
                     model=self.model, contents=prompt, config=config
                 )
             except errors.APIError as exc:
+                # Billing limits (spend cap: 429, no prepaid credit: 402) won't lift by
+                # waiting, so stop at once instead of retrying.
+                text = str(exc).lower()
+                if exc.code == 402 or "spend cap" in text or "spending cap" in text:
+                    raise SpendingCapReached(
+                        "Gemini billing limit reached (spending cap or prepaid credit); "
+                        "check https://ai.studio/projects"
+                    ) from exc
                 if exc.code in self.RETRYABLE_CODES and not last_try:
                     self._wait(attempt, f"API error {exc.code}")
                     continue
@@ -243,6 +255,7 @@ class Agent:
     notebook: list[str] = field(default_factory=list)
     notes: str = ""
     notes_through: int = 0  # notebook entries already folded into `notes`
+    notes_round: int = 0    # game round after which the notes were written
 
     def system_prompt(self) -> str:
         raise NotImplementedError
@@ -252,11 +265,12 @@ class Agent:
         recent = _notebook_text(self.notebook, self.memory_window)
         if not self.notes:
             return f"Your notebook:\n{recent}"
-        return (f"Your private notes (written by you after round {self.notes_through}):\n"
+        return (f"Your private notes (written by you after round {self.notes_round}):\n"
                 f"{self.notes}\n\nYour notebook, recent rounds:\n{recent}")
 
-    def update_notes(self) -> None:
+    def update_notes(self, round_no: int | None = None) -> None:
         """Fold every round since the last update into the agent's own notes."""
+        self.notes_round = round_no if round_no is not None else len(self.notebook)
         new_entries = self.notebook[self.notes_through:]
         if not new_entries:
             return

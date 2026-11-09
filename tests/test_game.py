@@ -104,7 +104,7 @@ class TestNotes(unittest.TestCase):
         self.assertEqual(len(results), 25)
         # Rounds 10 and 20 -> 2 updates x 2 agents.
         rows = conn.execute("SELECT round_no, agent FROM notes ORDER BY round_no, agent").fetchall()
-        self.assertEqual(rows, [(10, "listener"), (10, "speaker"), (20, "listener"), (20, "speaker")])
+        self.assertEqual(rows, [(10, "listener A"), (10, "speaker A"), (20, "listener A"), (20, "speaker A")])
         # Each agent sees its own notes, never the other's.
         speaker_prompts = [p for s, p in brain.prompts if s == "SpeakerOut"]
         listener_prompts = [p for s, p in brain.prompts if s == "ListenerOut"]
