@@ -13,15 +13,32 @@ Two Gemini agents play a guessing game using only randomly generated alien symbo
 | Finding | Evidence |
 | --- | --- |
 | A shared language emerges every time | 9/9 standard runs beat the 25% random baseline by round 20; most reach 98–100% |
-| Scarce symbols produce grammar | Topographic similarity 0.68–0.78 in every Level 2–3 run (shuffled messages: 0.00, p = 0.001) |
+| Scarce symbols produce grammar | Topographic similarity 0.67–0.89 in every Level 2–3 run (shuffled messages: 0.00, p = 0.001) |
 | Agents settle for "good enough" languages | 1 of 4 Level 2 runs used shape words only (79%); Level 3 encoded direction but never distance (80%) |
 | Private notes halve the cost | Same structure, $0.67–0.88 per run instead of $1.53 |
 | Telling the speaker what was picked helps | Level 3 rose from 80% to 90–93% with full feedback (2 runs, cut short at 80–97 rounds) |
 | They describe objects they have never seen | 4 of 5 held-out objects understood on first sight; e.g. *purple star* = purple word + star word |
 | Newcomer test hit a ceiling | A fresh listener reached 95% in 20 rounds, but so did the original pair, so no difference was measurable |
-| Two tribes meeting | <!-- RESULT: tribes --> pending |
+| Separate dialects can still meet | Two tribes built dialects sharing no full message, yet understood each other 97% of the time: 4 of 5 shape words were identical, two of them explicitly chosen because they look like the shape ("⍜ is the clearest iconic match" for circle), and color words were learned from single mistakes |
+| Grammar is not just borrowed English | Neural agents trained from zero on the same game also build structure (topsim 0.54, 63% on unseen objects), but need ~15,000 games instead of ~20 |
 
-Total cost of every experiment in this README: **<!-- RESULT: total cost --> pending**.
+Total cost of every experiment in this README: **$15.13** for 21 runs, 2,697 rounds and 5,621 Gemini API calls (the neural baseline is free).
+
+## LLM agents vs. neural agents trained from scratch
+
+Do LLM agents really *invent* a language, or just reuse what they learned from human text? As a control, the same game is played by two small neural networks (a GRU speaker and listener, trained end to end with the Gumbel-softmax estimator) that start with no knowledge at all.
+
+![LLM agents vs neural agents](results/llm_vs_neural_level2.png)
+
+| | LLM agents (Gemini) | Neural agents (5 seeds) |
+| --- | --- | --- |
+| Games to reach 90% | ~20 | ~15,000 (10,800–16,900) |
+| Final accuracy | 98–100% | 98–100% |
+| Topographic similarity | 0.67–0.89 | 0.40–0.70 (mean 0.54) |
+| Never-seen objects | 4 of 5 on first sight | 63% on average (chance: 25%) |
+| Cost | ~$0.80 per run | free; ~20 s per seed on an RTX 5060 |
+
+**Reading:** structure emerges from the game itself (the neural agents prove it needs no prior knowledge), and LLM priors make it about 700× faster and cleaner.
 
 ## The language they invented (Level 2, run 5)
 
@@ -80,8 +97,7 @@ At **Level 3** (navigating a 7 × 7 grid) they invented four direction words wit
 | Held-out test | Can they describe objects never seen in training? | `--experiment holdout` |
 | Newcomer | Does a fresh agent learn faster from a speaker who already has a language? | `--experiment newcomer` |
 | Two tribes | When two independently grown dialects meet, what happens? | `--experiment tribes` |
-
-<!-- RESULT: experiment details -->
+| Neural baseline | How do agents with zero prior knowledge compare? | `python neural_baseline.py --level 2` |
 
 ## Measuring structure: topographic similarity
 
@@ -90,7 +106,8 @@ In a compositional language, similar meanings get similar messages. For every pa
 ## Honest limitations
 
 - **Prior knowledge leaks in.** Symbols are invented, but ideas like "purple = red + blue", or picking `⧖` for triangle because it looks like one, come from the model's training on human text.
-- **One model family.** All agents are `gemini-3.8-flash`; results may differ across models.
+- **One model family.** All LLM agents are `gemini-3.8-flash`; results may differ across models.
+- **Neural messages are fixed-length.** Neural agents always send exactly 3 symbols; LLM agents may send 1–3.
 - **Small samples.** Most conditions have 1–4 runs. Each conclusion above says how many.
 - **Notebooks contain words.** Targets are shown as English names (or grid pictures), and each agent's notebook records them that way. Only the *messages* are restricted to alien symbols.
 
@@ -99,6 +116,8 @@ In a compositional language, similar meanings get similar messages. For every pa
 ```bash
 streamlit run app.py
 ```
+
+![Dashboard: the invented language of a held-out experiment, drawn as a color × shape map](results/dashboard.png)
 
 Browse every run: success curve, emerged dictionary with its compositionality score, a round-by-round replay showing exactly what each agent saw and its reasoning, and each agent's private notes over time. It opens the database read-only, so it is safe while experiments run.
 
@@ -111,7 +130,11 @@ cp .env.example .env                               # add your Gemini API key
 python main.py --mock --rounds 20                  # free: random agents, no API calls
 python main.py --level 2 --rounds 200              # real run (~$0.80)
 python analyze.py                                  # chart, dictionary, compositionality
-python -m unittest discover -s tests -t .          # 38 tests
+python -m unittest discover -s tests -t .          # 41 tests
+
+# optional: neural-network baseline (PyTorch, GPU recommended)
+pip install -r requirements-neural.txt --index-url https://download.pytorch.org/whl/cu128
+python neural_baseline.py --level 2 --seeds 5
 ```
 
 ## Project structure
@@ -125,8 +148,9 @@ python -m unittest discover -s tests -t .          # 38 tests
 | `analyze.py` | Charts, emerged dictionaries, per-experiment reports |
 | `costs.py` | Official Gemini prices and per-run cost estimates |
 | `app.py` | Streamlit dashboard |
-| `tests/` | 38 unit tests, including privacy and rule-enforcement checks |
+| `neural_baseline.py` | The same game played by neural networks trained from scratch (PyTorch) |
+| `tests/` | 41 unit tests, including privacy and rule-enforcement checks |
 
 ## Built with
 
-Python 3.12 · Google Gemini API with structured outputs (Pydantic) · SQLite · matplotlib · SciPy · Streamlit
+Python 3.12 · Google Gemini API with structured outputs (Pydantic) · PyTorch · SQLite · matplotlib · SciPy · Streamlit

@@ -1,0 +1,5 @@
+# Optional: only for neural_baseline.py (the neural-network comparison).
+# GPU build for NVIDIA cards (CUDA 12.8+; required for RTX 50-series):
+#   pip install -r requirements-neural.txt --index-url https://download.pytorch.org/whl/cu128
+# CPU-only also works (slower): pip install torch
+torch>=2.7
