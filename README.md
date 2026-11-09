@@ -121,6 +121,8 @@ streamlit run app.py
 
 Browse every run: success curve, emerged dictionary with its compositionality score, a round-by-round replay showing exactly what each agent saw and its reasoning, and each agent's private notes over time. It opens the database read-only, so it is safe while experiments run.
 
+**All the data is included.** `runs.db` holds every experiment in this README: 2,697 rounds with both agents' reasoning and 219 private notes. Clone the repo, install `requirements.txt`, and run `streamlit run app.py` to explore it. No API key needed.
+
 ## Run it yourself
 
 ```bash
