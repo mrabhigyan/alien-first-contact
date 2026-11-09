@@ -483,7 +483,7 @@ with tab_replay:
 
 with tab_notes:
     if notes.empty:
-        st.markdown('<div class="caption">This run has no notes (notes were added on Day 2).</div>',
+        st.markdown('<div class="caption">This run predates the private-notes feature.</div>',
                     unsafe_allow_html=True)
     else:
         a, b = st.columns([1, 2])
