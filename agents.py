@@ -33,6 +33,11 @@ class ListenerOut(BaseModel):
     choice: int = Field(description="The number of the chosen object, as listed.")
 
 
+class NotesOut(BaseModel):
+    reasoning: str = Field(description="Brief private reasoning, written before the notes.")
+    notes: str = Field(description="Your updated private notes.")
+
+
 T = TypeVar("T", bound=BaseModel)
 
 # ---------------------------------------------------------------- brains
@@ -155,6 +160,8 @@ class MockBrain:
         if schema is ListenerOut:
             choice = self.rng.randint(1, self.n_candidates)
             return ListenerOut(reasoning="(mock)", choice=choice)  # type: ignore[return-value]
+        if schema is NotesOut:
+            return NotesOut(reasoning="(mock)", notes="(mock notes)")  # type: ignore[return-value]
         raise TypeError(f"MockBrain cannot answer schema {schema.__name__}")
 
 
@@ -177,7 +184,8 @@ Rules:
   the two of you use the symbols over many rounds.
 
 After each round you learn whether your partner picked correctly.
-Your private notebook of past rounds is shown with each round. Use it."""
+Your private notebook of past rounds (and your own notes, once you write them)
+is shown with each round. Use it."""
 
 LISTENER_SYSTEM = """You are playing a communication game with a partner you cannot see.
 You and your partner share no language. Your partner was shown one target object and
@@ -192,7 +200,8 @@ No one has told you what any symbol means. Meaning can only come from how the tw
 you use the symbols over many rounds.
 
 After each round you learn whether you were right, and which object was the target.
-Your private notebook of past rounds is shown with each round. Use it."""
+Your private notebook of past rounds (and your own notes, once you write them)
+is shown with each round. Use it."""
 
 
 def _notebook_text(notebook: list[str], window: int) -> str:
@@ -205,25 +214,76 @@ def _notebook_text(notebook: list[str], window: int) -> str:
     return header + "\n".join(shown)
 
 
+NOTES_REQUEST = """Time to update your private notes. Only you will ever read them.
+Rewrite them so they keep everything useful for future rounds, using your current notes
+and the rounds since you last wrote them. Keep them under {words} words.
+
+Your current notes:
+{notes}
+
+Rounds since your last update:
+{recent}
+
+Reason briefly, then give your new notes."""
+
+NOTES_WORDS = 150
+
+
 # ---------------------------------------------------------------- agents
 
 
 @dataclass
-class Speaker:
+class Agent:
+    """Shared memory behaviour. Each instance has its own notebook and notes;
+    nothing here is ever shared between the two agents."""
+
     brain: Brain
     alphabet: list[str]
-    max_len: int = 3
     memory_window: int = 40
     notebook: list[str] = field(default_factory=list)
+    notes: str = ""
+    notes_through: int = 0  # notebook entries already folded into `notes`
+
+    def system_prompt(self) -> str:
+        raise NotImplementedError
+
+    def memory_text(self) -> str:
+        """What the agent sees of its past: its own notes (if any) + recent rounds."""
+        recent = _notebook_text(self.notebook, self.memory_window)
+        if not self.notes:
+            return f"Your notebook:\n{recent}"
+        return (f"Your private notes (written by you after round {self.notes_through}):\n"
+                f"{self.notes}\n\nYour notebook, recent rounds:\n{recent}")
+
+    def update_notes(self) -> None:
+        """Fold every round since the last update into the agent's own notes."""
+        new_entries = self.notebook[self.notes_through:]
+        if not new_entries:
+            return
+        prompt = NOTES_REQUEST.format(
+            words=NOTES_WORDS,
+            notes=self.notes or "(none yet)",
+            recent="\n".join(new_entries),
+        )
+        out = self.brain.ask(self.system_prompt(), prompt, NotesOut)
+        self.notes = out.notes.strip()
+        self.notes_through = len(self.notebook)
+
+
+@dataclass
+class Speaker(Agent):
+    max_len: int = 3
+
+    def system_prompt(self) -> str:
+        return SPEAKER_SYSTEM.format(alphabet=" ".join(self.alphabet), max_len=self.max_len)
 
     def speak(self, round_no: int, target: Obj) -> SpeakerOut:
-        system = SPEAKER_SYSTEM.format(alphabet=" ".join(self.alphabet), max_len=self.max_len)
         prompt = (
-            f"Your notebook:\n{_notebook_text(self.notebook, self.memory_window)}\n\n"
+            f"{self.memory_text()}\n\n"
             f"Round {round_no}. Target object: {target.name}\n"
             "Reason briefly, then give your message."
         )
-        return self.brain.ask(system, prompt, SpeakerOut)
+        return self.brain.ask(self.system_prompt(), prompt, SpeakerOut)
 
     def remember(self, round_no: int, target: Obj, message: list[str], outcome: str) -> None:
         sent = " ".join(message) if message else "(nothing)"
@@ -231,22 +291,19 @@ class Speaker:
 
 
 @dataclass
-class Listener:
-    brain: Brain
-    alphabet: list[str]
-    memory_window: int = 40
-    notebook: list[str] = field(default_factory=list)
+class Listener(Agent):
+    def system_prompt(self) -> str:
+        return LISTENER_SYSTEM.format(alphabet=" ".join(self.alphabet))
 
     def listen(self, round_no: int, message: list[str], candidates: list[Obj]) -> ListenerOut:
-        system = LISTENER_SYSTEM.format(alphabet=" ".join(self.alphabet))
         options = "\n".join(f"{i}. {obj.name}" for i, obj in enumerate(candidates, start=1))
         prompt = (
-            f"Your notebook:\n{_notebook_text(self.notebook, self.memory_window)}\n\n"
+            f"{self.memory_text()}\n\n"
             f"Round {round_no}. Message received: {' '.join(message)}\n"
             f"Objects:\n{options}\n"
             "Reason briefly, then give the number of your choice."
         )
-        return self.brain.ask(system, prompt, ListenerOut)
+        return self.brain.ask(self.system_prompt(), prompt, ListenerOut)
 
     def remember(
         self,

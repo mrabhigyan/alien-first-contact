@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 
+from costs import estimate_cost, format_cost
 from agents import Brain, GeminiBrain, Listener, MockBrain, Speaker
 from world import (
     DEFAULT_ALPHABET_SIZE,
@@ -44,6 +45,7 @@ class Config:
     mock: bool
     db: str
     model: str
+    notes_every: int = 0  # 0 = agents never write notes; N = each agent updates notes every N rounds
 
 
 @dataclass(frozen=True)
@@ -98,7 +100,17 @@ CREATE TABLE IF NOT EXISTS rounds (
     created_at         TEXT NOT NULL,
     PRIMARY KEY (run_id, round_no)
 );
+CREATE TABLE IF NOT EXISTS notes (
+    run_id     INTEGER NOT NULL REFERENCES runs(run_id),
+    round_no   INTEGER NOT NULL,  -- notes written after this round
+    agent      TEXT NOT NULL,     -- 'speaker' or 'listener'
+    notes      TEXT NOT NULL,
+    PRIMARY KEY (run_id, round_no, agent)
+);
 """
+
+# Columns added after the first version of the schema: (table, column, definition).
+MIGRATIONS = [("runs", "notes_every", "INTEGER NOT NULL DEFAULT 0")]
 
 
 def now() -> str:
@@ -109,16 +121,22 @@ def open_db(path: str) -> sqlite3.Connection:
     # timeout: wait up to 30s if another run is writing (parallel runs share the file)
     conn = sqlite3.connect(path, timeout=30)
     conn.executescript(SCHEMA)
+    for table, column, definition in MIGRATIONS:
+        existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    conn.commit()
     return conn
 
 
 def start_run(conn: sqlite3.Connection, cfg: Config, alphabet: list[str]) -> int:
     cur = conn.execute(
         "INSERT INTO runs (started_at, level, n_candidates, alphabet, max_len, memory_window,"
-        " seed, model, mock) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " seed, model, mock, notes_every) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             now(), cfg.level, cfg.candidates, json.dumps(alphabet, ensure_ascii=False),
             cfg.max_len, cfg.memory, cfg.seed, "mock" if cfg.mock else cfg.model, int(cfg.mock),
+            cfg.notes_every,
         ),
     )
     conn.commit()
@@ -191,6 +209,17 @@ def play_round(
     )
 
 
+def update_notes(
+    conn: sqlite3.Connection, run_id: int, round_no: int, speaker: Speaker, listener: Listener
+) -> None:
+    """Each agent rewrites its own private notes; both versions are logged for inspection."""
+    for name, agent in (("speaker", speaker), ("listener", listener)):
+        agent.update_notes()
+        conn.execute("INSERT INTO notes VALUES (?, ?, ?, ?)", (run_id, round_no, name, agent.notes))
+    conn.commit()
+    print(f"     [notes updated by both agents after round {round_no}]")
+
+
 def build_brain(cfg: Config, alphabet: list[str]) -> Brain:
     if cfg.mock:
         return MockBrain(random.Random(cfg.seed + 1), alphabet, cfg.candidates, cfg.max_len)
@@ -209,8 +238,8 @@ def run(cfg: Config, conn: sqlite3.Connection, brain: Brain | None = None) -> li
 
     # One brain object serves both agents: API calls are stateless, so nothing leaks.
     # Each agent's memory lives only in its own notebook.
-    speaker = Speaker(brain, alphabet, cfg.max_len, cfg.memory)
-    listener = Listener(brain, alphabet, cfg.memory)
+    speaker = Speaker(brain=brain, alphabet=alphabet, max_len=cfg.max_len, memory_window=cfg.memory)
+    listener = Listener(brain=brain, alphabet=alphabet, memory_window=cfg.memory)
 
     run_id = start_run(conn, cfg, alphabet)
     print_header(cfg, run_id, alphabet, len(objects))
@@ -224,6 +253,8 @@ def run(cfg: Config, conn: sqlite3.Connection, brain: Brain | None = None) -> li
             print_round(result)
             if round_no % REPORT_EVERY == 0:
                 print_block(results, cfg.candidates)
+            if cfg.notes_every and round_no % cfg.notes_every == 0 and round_no < cfg.rounds:
+                update_notes(conn, run_id, round_no, speaker, listener)
     except KeyboardInterrupt:
         print("\nStopped by user. Saving what we have...")
     finally:
@@ -273,6 +304,8 @@ def print_summary(results: list[RoundResult], n_candidates: int, brain: Brain, r
     print(f"Success last {len(last):<3}: {rate(last):.1f}%")
     print(f"Invalid messages: {invalid}")
     print(f"API calls       : {u.calls}   tokens in/out: {u.input_tokens:,} / {u.output_tokens:,}")
+    model = getattr(brain, "model", "mock")
+    print(f"Estimated cost  : {format_cost(estimate_cost(model, u.input_tokens, u.output_tokens))}")
 
 
 # ---------------------------------------------------------------- CLI
@@ -285,7 +318,9 @@ def parse_args(argv: list[str] | None = None) -> Config:
     p.add_argument("--candidates", type=int, default=4)
     p.add_argument("--alphabet-size", type=int, default=DEFAULT_ALPHABET_SIZE)
     p.add_argument("--max-len", type=int, default=DEFAULT_MAX_LEN)
-    p.add_argument("--memory", type=int, default=40, help="notebook rounds shown to each agent")
+    p.add_argument("--memory", type=int, default=20, help="recent notebook rounds shown to each agent")
+    p.add_argument("--notes-every", type=int, default=20,
+                   help="each agent rewrites its own private notes every N rounds (0 = off)")
     p.add_argument("--seed", type=int, default=None, help="random if omitted")
     p.add_argument("--mock", action="store_true", help="random answers, no API calls")
     p.add_argument("--db", default="runs.db")
@@ -294,7 +329,7 @@ def parse_args(argv: list[str] | None = None) -> Config:
     seed = a.seed if a.seed is not None else random.SystemRandom().randrange(2**31)
     model = a.model or os.environ.get("GEMINI_MODEL") or DEFAULT_MODEL
     return Config(a.rounds, a.level, a.candidates, a.alphabet_size, a.max_len, a.memory,
-                  seed, a.mock, a.db, model)
+                  seed, a.mock, a.db, model, a.notes_every)
 
 
 def main(argv: list[str] | None = None) -> None:

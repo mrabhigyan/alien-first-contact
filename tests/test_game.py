@@ -3,7 +3,7 @@ import json
 import unittest
 from contextlib import redirect_stdout
 
-from agents import ListenerOut, SpeakerOut, Usage
+from agents import ListenerOut, NotesOut, SpeakerOut, Usage
 from main import Config, open_db, run
 
 
@@ -68,6 +68,51 @@ class TestRulesEnforced(unittest.TestCase):
         self.assertEqual(brain.listener_calls, 0)
         msgs = [json.loads(m) for (m,) in conn.execute("SELECT message FROM rounds")]
         self.assertEqual(msgs, [["red"]] * 5)
+
+
+class RecordingBrain:
+    """Valid answers; remembers every prompt so tests can check what each agent saw."""
+
+    def __init__(self, alphabet_symbol_source) -> None:
+        self.usage = Usage()
+        self.prompts: list[tuple[str, str]] = []  # (schema name, prompt)
+        self.notes_written = 0
+        self.alphabet_symbol_source = alphabet_symbol_source
+
+    def ask(self, system, prompt, schema):
+        self.usage.calls += 1
+        self.prompts.append((schema.__name__, prompt))
+        if schema is SpeakerOut:
+            symbol = system.split("\n\n")[1].split()[0]  # first symbol of this run's alphabet
+            return SpeakerOut(reasoning="", message=[symbol])
+        if schema is ListenerOut:
+            return ListenerOut(reasoning="", choice=1)
+        self.notes_written += 1
+        # A unique marker per write, so leaks are detectable.
+        marker = "SPEAKER-SECRET" if "I sent" in prompt else "LISTENER-SECRET"
+        return NotesOut(reasoning="", notes=f"{marker}-{self.notes_written}")
+
+
+class TestNotes(unittest.TestCase):
+    def test_notes_written_logged_and_private(self) -> None:
+        brain = RecordingBrain(None)
+        results, conn = quiet_run(config(rounds=25, mock=False, notes_every=10), brain)
+        self.assertEqual(len(results), 25)
+        # Rounds 10 and 20 -> 2 updates x 2 agents.
+        rows = conn.execute("SELECT round_no, agent FROM notes ORDER BY round_no, agent").fetchall()
+        self.assertEqual(rows, [(10, "listener"), (10, "speaker"), (20, "listener"), (20, "speaker")])
+        # Each agent sees its own notes, never the other's.
+        speaker_prompts = [p for s, p in brain.prompts if s == "SpeakerOut"]
+        listener_prompts = [p for s, p in brain.prompts if s == "ListenerOut"]
+        self.assertTrue(any("SPEAKER-SECRET" in p for p in speaker_prompts))
+        self.assertTrue(any("LISTENER-SECRET" in p for p in listener_prompts))
+        self.assertFalse(any("LISTENER-SECRET" in p for p in speaker_prompts))
+        self.assertFalse(any("SPEAKER-SECRET" in p for p in listener_prompts))
+
+    def test_notes_off(self) -> None:
+        _, conn = quiet_run(config(rounds=25, notes_every=0))
+        (n,) = conn.execute("SELECT COUNT(*) FROM notes").fetchone()
+        self.assertEqual(n, 0)
 
 
 if __name__ == "__main__":
