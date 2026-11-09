@@ -106,7 +106,8 @@ def now() -> str:
 
 
 def open_db(path: str) -> sqlite3.Connection:
-    conn = sqlite3.connect(path)
+    # timeout: wait up to 30s if another run is writing (parallel runs share the file)
+    conn = sqlite3.connect(path, timeout=30)
     conn.executescript(SCHEMA)
     return conn
 
