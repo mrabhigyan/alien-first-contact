@@ -1,7 +1,7 @@
 import unittest
 
 from metrics import edit_distance, meaning_distance, topsim, topsim_test
-from world import Cell, Obj, make_objects
+from world import COLORS, SHAPES, Cell, Obj, make_objects
 
 
 class TestMetrics(unittest.TestCase):
@@ -17,8 +17,8 @@ class TestMetrics(unittest.TestCase):
         self.assertEqual(meaning_distance(Cell(1, 2), Cell(-1, 0)), 4)
 
     def test_perfectly_compositional_language_scores_high(self) -> None:
-        colors = {c: s for c, s in zip(["red", "blue", "green", "yellow", "purple", "orange"], "abcdef")}
-        shapes = {s: t for s, t in zip(["circle", "square", "triangle", "star", "diamond"], "vwxyz")}
+        colors = dict(zip(COLORS, "abcdef", strict=True))
+        shapes = dict(zip(SHAPES, "vwxyz", strict=True))
         lexicon = {o: [colors[o.color], shapes[o.shape]] for o in make_objects(2)}
         result = topsim_test(lexicon, shuffles=200)
         self.assertGreater(result.score, 0.95)
@@ -26,7 +26,7 @@ class TestMetrics(unittest.TestCase):
         self.assertLess(result.p_value, 0.01)
 
     def test_level1_undefined(self) -> None:
-        lexicon = {o: [s] for o, s in zip(make_objects(1), "abcdef")}
+        lexicon = {o: [s] for o, s in zip(make_objects(1), "abcdef", strict=True)}
         self.assertIsNone(topsim(lexicon))
 
 

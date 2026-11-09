@@ -165,7 +165,7 @@ def runs_table() -> pd.DataFrame:
     df = df[df.rounds_played > 0].copy()
     df["success"] = 100 * df.successes / df.rounds_played
     df["cost"] = [estimate_cost(m, i, o) or 0.0
-                  for m, i, o in zip(df.model, df.input_tokens, df.output_tokens)]
+                  for m, i, o in zip(df.model, df.input_tokens, df.output_tokens, strict=True)]
     df["running"] = [bool(pd.isna(f)) for f in df.finished_at]
     return df
 

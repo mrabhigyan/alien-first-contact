@@ -31,7 +31,7 @@ def meaning_distance(x: Thing, y: Thing) -> int:
     """Cells: grid (Manhattan) distance. Objects: number of attributes that differ."""
     if isinstance(x, Cell) and isinstance(y, Cell):
         return abs(x.dx - y.dx) + abs(x.dy - y.dy)
-    return sum(a != b for a, b in zip(x.attributes, y.attributes))
+    return sum(a != b for a, b in zip(x.attributes, y.attributes, strict=True))
 
 
 def topsim(lexicon: dict[Thing, list[str]]) -> float | None:
@@ -68,7 +68,7 @@ def topsim_test(lexicon: dict[Thing, list[str]], shuffles: int = 1000,
     null = []
     for _ in range(shuffles):
         rng.shuffle(messages)
-        s = topsim(dict(zip(meanings, messages)))
+        s = topsim(dict(zip(meanings, messages, strict=True)))
         null.append(s if s is not None else 0.0)
     p = (1 + sum(s >= score for s in null)) / (1 + shuffles)
     return TopsimResult(score, sum(null) / len(null), p, len(lexicon))

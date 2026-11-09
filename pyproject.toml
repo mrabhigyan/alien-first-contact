@@ -1,0 +1,17 @@
+[project]
+name = "alien-first-contact"
+version = "1.0.0"
+description = "Two LLM agents invent a language from scratch: emergent grammar, generalization, and a neural-network baseline."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 110
+extend-exclude = ["docs", "tools/make_pdf.py", "tools/make_diagrams.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"app.py" = ["E501"]  # the dashboard's inline CSS block has long lines by nature

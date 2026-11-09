@@ -179,7 +179,7 @@ def run_seed(level: int, seed: int, steps: int, batch: int, k: int, vocab: int, 
     speaker.eval()
     with torch.no_grad():
         ids = speaker(feats.to(device)).argmax(dim=-1).cpu().tolist()
-    lexicon = {o: [alphabet[i] for i in row] for o, row in zip(objects, ids) if o not in held}
+    lexicon = {o: [alphabet[i] for i in row] for o, row in zip(objects, ids, strict=True) if o not in held}
     ts = topsim_test(lexicon, shuffles=300)
     return SeedResult(
         seed=seed, games_to_90=games_to_90, final_accuracy=final,
@@ -240,7 +240,7 @@ def plot_comparison(level: int, db: Path = Path(__file__).parent / "runs.db") ->
     for curve in llm_curves:  # from round 10, once the 10-round average is full
         ax.plot(range(10, len(curve) + 1), curve[9:], color=llm_color, linewidth=1.4, alpha=0.55)
     for seed in data["seeds"]:
-        xs, ys = zip(*seed["curve"])
+        xs, ys = zip(*seed["curve"], strict=True)
         ax.plot(xs, [100 * y for y in ys], color=nn_color, linewidth=1.4, alpha=0.55)
 
     ax.set_xscale("log")

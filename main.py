@@ -22,7 +22,7 @@ import sqlite3
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from dotenv import load_dotenv
 
@@ -161,7 +161,7 @@ MIGRATIONS = [
 
 
 def now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def open_db(path: str) -> sqlite3.Connection:

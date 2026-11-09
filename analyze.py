@@ -58,7 +58,7 @@ def load_run(conn: sqlite3.Connection, run_id: int | None) -> tuple[dict, list[R
                        (run_id,)).fetchone()
     if row is None:
         sys.exit(f"Run {run_id} not found.")
-    run = dict(zip(RUN_FIELDS, row))
+    run = dict(zip(RUN_FIELDS, row, strict=True))
     run["held_out"] = json.loads(run["held_out"] or "[]")
     rounds = [Row(*r) for r in conn.execute(
         "SELECT round_no, target, message, success, phase, speaker_id, listener_id, picked"

@@ -1,5 +1,10 @@
 # 👽 Alien First Contact
 
+[![tests](https://github.com/mrabhigyan/alien-first-contact/actions/workflows/tests.yml/badge.svg)](https://github.com/mrabhigyan/alien-first-contact/actions/workflows/tests.yml)
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](LICENSE)
+[![Ruff](https://img.shields.io/badge/code%20style-ruff-261230)](https://github.com/astral-sh/ruff)
+
 **Two LLM agents that share no language invent one from scratch, and it has grammar.**
 
 Two Gemini agents play a guessing game using only randomly generated alien symbols like `⟁ ⧖ ⍨ ⏇`. No symbol means anything at the start. They never share memory. Within about 20 rounds they agree on a vocabulary. When symbols are scarce, they build **compositional grammar** on their own: a color word plus a shape word, word order, and even new words made by doubling old ones.
@@ -7,6 +12,16 @@ Two Gemini agents play a guessing game using only randomly generated alien symbo
 > As AI agents built by different companies start working together, how do they learn to understand each other? This project is a small, controlled experiment in **emergent communication**: watching that understanding form from nothing.
 
 ![Level 2: success rate over 200 rounds](results/success_run5.png)
+
+## Try it in 2 minutes (no API key needed)
+
+All experiment data is in the repo, so you can explore every run without spending anything:
+
+```bash
+git clone https://github.com/mrabhigyan/alien-first-contact.git && cd alien-first-contact
+pip install -r requirements.txt
+streamlit run app.py          # dashboard: language maps, learning curves, round-by-round replays
+```
 
 ## Key results
 
@@ -128,11 +143,16 @@ Browse every run: success curve, emerged dictionary with its compositionality sc
 ```bash
 python -m venv .venv && .venv\Scripts\activate     # Windows (source .venv/bin/activate elsewhere)
 pip install -r requirements.txt
-cp .env.example .env                               # add your Gemini API key
-python main.py --mock --rounds 20                  # free: random agents, no API calls
-python main.py --level 2 --rounds 200              # real run (~$0.80)
-python analyze.py                                  # chart, dictionary, compositionality
+
+# free, no API key
+python main.py --mock --rounds 20                  # random agents, tests the whole pipeline
+python analyze.py --run 5                          # chart, dictionary, compositionality of a saved run
 python -m unittest discover -s tests -t .          # 41 tests
+ruff check .                                       # lint
+
+# new real experiments (needs your own Gemini key)
+cp .env.example .env                               # then add GEMINI_API_KEY
+python main.py --level 2 --rounds 200              # ~$0.80
 
 # optional: neural-network baseline (PyTorch, GPU recommended)
 pip install -r requirements-neural.txt --index-url https://download.pytorch.org/whl/cu128
@@ -152,7 +172,27 @@ python neural_baseline.py --level 2 --seeds 5
 | `app.py` | Streamlit dashboard |
 | `neural_baseline.py` | The same game played by neural networks trained from scratch (PyTorch) |
 | `tests/` | 41 unit tests, including privacy and rule-enforcement checks |
+| `runs.db` | Every round of every experiment (SQLite), read by `analyze.py` and `app.py` |
+| `results/` | Charts and the neural-baseline results used in this README |
+| `tools/screenshot.py` | Captures the dashboard screenshot (optional, uses Playwright) |
+| `.github/workflows/tests.yml` | Runs lint and tests on every push |
+
+## Related work
+
+This project builds on a growing literature on emergent communication:
+
+- Lazaridou & Baroni (2020), [Emergent Multi-Agent Communication in the Deep Learning Era](https://arxiv.org/abs/2006.02419): survey of neural agents inventing languages; topographic similarity as a measure of structure.
+- Havrylov & Titov (2017), [Emergence of Language with Multi-agent Games](https://arxiv.org/abs/1705.11192): the Gumbel-softmax training used by the neural baseline here.
+- Kouwenhoven, Peeperkorn & Verhoef (2024), [Searching for Structure: Investigating Emergent Communication with Large Language Models](https://arxiv.org/abs/2412.07646): LLMs in referential games develop structured languages.
+- Ashery, Aiello & Baronchelli (2025), [Emergent social conventions and collective bias in LLM populations](https://arxiv.org/abs/2410.08948), *Science Advances*: LLM populations converge on shared conventions.
+- Talebirad et al. (2026), [From Signals to Structure: How Memory Architecture Drives Language Emergence in LLM Agents](https://arxiv.org/abs/2607.00233): LLM agents in Lewis signaling games; persistent private notebooks coordinate best.
+
+What this project adds is a hands-on, fully logged setup that puts several questions side by side: held-out generalization, dialect contact between independently grown languages, a feedback ablation, and a direct comparison with neural agents trained from scratch on the identical game.
 
 ## Built with
 
-Python 3.12 · Google Gemini API with structured outputs (Pydantic) · PyTorch · SQLite · matplotlib · SciPy · Streamlit
+Python 3.12 · Google Gemini API with structured outputs (Pydantic) · PyTorch · SQLite · pandas · SciPy · matplotlib · Streamlit + Altair · ruff · GitHub Actions
+
+## License
+
+[Apache 2.0](LICENSE)
