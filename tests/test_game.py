@@ -55,6 +55,10 @@ class TestMockRun(unittest.TestCase):
         self.assertEqual([(r.target, r.message, r.choice) for r in a],
                          [(r.target, r.message, r.choice) for r in b])
 
+    def test_level_3(self) -> None:
+        results, _ = quiet_run(config(level=3, rounds=10))
+        self.assertTrue(all(hasattr(r.target, "dx") for r in results))
+
     def test_level_2(self) -> None:
         results, _ = quiet_run(config(level=2, rounds=10))
         self.assertTrue(all(r.target.shape for r in results))

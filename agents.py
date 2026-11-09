@@ -16,7 +16,7 @@ from typing import Protocol, TypeVar
 
 from pydantic import BaseModel, Field, ValidationError
 
-from world import Obj
+from world import Thing, describe_candidates, describe_target
 
 # ---------------------------------------------------------------- structured outputs
 
@@ -277,15 +277,15 @@ class Speaker(Agent):
     def system_prompt(self) -> str:
         return SPEAKER_SYSTEM.format(alphabet=" ".join(self.alphabet), max_len=self.max_len)
 
-    def speak(self, round_no: int, target: Obj) -> SpeakerOut:
+    def speak(self, round_no: int, target: Thing) -> SpeakerOut:
         prompt = (
             f"{self.memory_text()}\n\n"
-            f"Round {round_no}. Target object: {target.name}\n"
+            f"Round {round_no}. Target object: {describe_target(target)}\n"
             "Reason briefly, then give your message."
         )
         return self.brain.ask(self.system_prompt(), prompt, SpeakerOut)
 
-    def remember(self, round_no: int, target: Obj, message: list[str], outcome: str) -> None:
+    def remember(self, round_no: int, target: Thing, message: list[str], outcome: str) -> None:
         sent = " ".join(message) if message else "(nothing)"
         self.notebook.append(f"Round {round_no}: target {target.name} | I sent {sent} | {outcome}")
 
@@ -295,8 +295,8 @@ class Listener(Agent):
     def system_prompt(self) -> str:
         return LISTENER_SYSTEM.format(alphabet=" ".join(self.alphabet))
 
-    def listen(self, round_no: int, message: list[str], candidates: list[Obj]) -> ListenerOut:
-        options = "\n".join(f"{i}. {obj.name}" for i, obj in enumerate(candidates, start=1))
+    def listen(self, round_no: int, message: list[str], candidates: list[Thing]) -> ListenerOut:
+        options = describe_candidates(candidates)
         prompt = (
             f"{self.memory_text()}\n\n"
             f"Round {round_no}. Message received: {' '.join(message)}\n"
@@ -309,9 +309,9 @@ class Listener(Agent):
         self,
         round_no: int,
         message: list[str],
-        candidates: list[Obj],
-        picked: Obj | None,
-        target: Obj,
+        candidates: list[Thing],
+        picked: Thing | None,
+        target: Thing,
     ) -> None:
         options = ", ".join(obj.name for obj in candidates)
         picked_name = picked.name if picked else "(invalid choice)"

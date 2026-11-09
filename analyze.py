@@ -18,6 +18,9 @@ import matplotlib
 matplotlib.use("Agg")  # draw to a file, no window
 import matplotlib.pyplot as plt
 
+from metrics import topsim_test
+from world import make_objects
+
 # Reference palette: one series -> slot 1 blue; text in ink tokens.
 SURFACE = "#fcfcfb"
 INK = "#0b0b0b"
@@ -82,7 +85,7 @@ def plot_success(run: dict, rounds: list[tuple], window: int, path: Path) -> Non
         ax.spines[side].set_visible(False)
     ax.spines["bottom"].set_color(GRID)
 
-    level = "colors" if run["level"] == 1 else "color + shape"
+    level = {1: "colors", 2: "color + shape", 3: "grid cells"}.get(run["level"], "?")
     fig.suptitle(f"Agents reach {final:.0f}% success, up from {baseline:.0f}% guessing",
                  x=0.07, ha="left", fontsize=13, fontweight="bold", color=INK)
     ax.set_title(f"Run {run['run_id']} · level {run['level']} ({level}) · "
@@ -125,6 +128,17 @@ def main(argv: list[str] | None = None) -> None:
         top, n = counts.most_common(1)[0]
         share = 100 * n / sum(counts.values())
         print(f"  {target:<18} {top:<8} {n:>3}x  ({share:.0f}% consistent)")
+
+    by_name = {t.name: t for t in make_objects(run["level"])}
+    lexicon = {by_name[target]: counts.most_common(1)[0][0].split()
+               for target, counts in dictionary(rounds, skip).items()}
+    result = topsim_test(lexicon)
+    print("\nCompositionality (topographic similarity, 0 = none, 1 = perfect):")
+    if result is None:
+        print("  not defined here (needs meanings with 2+ attributes, e.g. level 2 or 3)")
+    else:
+        print(f"  topsim = {result.score:.2f}   shuffled messages = {result.shuffled_mean:.2f}"
+              f"   p = {result.p_value:.3f}   ({result.n_meanings} meanings)")
 
 
 if __name__ == "__main__":

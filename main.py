@@ -22,7 +22,7 @@ from agents import Brain, GeminiBrain, Listener, MockBrain, Speaker
 from world import (
     DEFAULT_ALPHABET_SIZE,
     DEFAULT_MAX_LEN,
-    Obj,
+    Thing,
     make_alphabet,
     make_objects,
     sample_round,
@@ -51,13 +51,13 @@ class Config:
 @dataclass(frozen=True)
 class RoundResult:
     round_no: int
-    target: Obj
-    candidates: list[Obj]
+    target: Thing
+    candidates: list[Thing]
     message: list[str]
     valid: bool
     error: str
     choice: int | None
-    picked: Obj | None
+    picked: Thing | None
     success: bool
     speaker_reasoning: str
     listener_reasoning: str
@@ -176,7 +176,7 @@ def play_round(
     round_no: int,
     speaker: Speaker,
     listener: Listener,
-    objects: list[Obj],
+    objects: list[Thing],
     cfg: Config,
     rng: random.Random,
 ) -> RoundResult:
@@ -314,7 +314,7 @@ def print_summary(results: list[RoundResult], n_candidates: int, brain: Brain, r
 def parse_args(argv: list[str] | None = None) -> Config:
     p = argparse.ArgumentParser(description="Alien First Contact: emergent language game")
     p.add_argument("--rounds", type=int, default=20)
-    p.add_argument("--level", type=int, default=1, choices=[1, 2])
+    p.add_argument("--level", type=int, default=1, choices=[1, 2, 3])
     p.add_argument("--candidates", type=int, default=4)
     p.add_argument("--alphabet-size", type=int, default=DEFAULT_ALPHABET_SIZE)
     p.add_argument("--max-len", type=int, default=DEFAULT_MAX_LEN)

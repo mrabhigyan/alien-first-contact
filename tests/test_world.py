@@ -71,5 +71,38 @@ class TestSampleRound(unittest.TestCase):
             self.assertIn(target, cands)
 
 
+
+class TestLevel3Grid(unittest.TestCase):
+    def test_cells(self) -> None:
+        from world import Cell
+        cells = make_objects(3)
+        self.assertEqual(len(cells), 48)  # 7x7 minus the centre
+        self.assertEqual(len({c.name for c in cells}), 48)
+        self.assertNotIn(Cell(0, 0), cells)
+        self.assertEqual(Cell(2, -1).name, "2 right, 1 down")
+        self.assertEqual(Cell(0, 3).name, "3 up")
+
+    def test_speaker_sees_picture_not_words(self) -> None:
+        from world import Cell, describe_target
+        text = describe_target(Cell(2, 1))
+        grid = text.splitlines()[1:]
+        self.assertEqual(len(grid), 7)
+        self.assertEqual(grid[2].split()[5], "T")   # row dy=+1, column dx=+2
+        self.assertEqual(grid[3].split()[3], "S")   # centre
+        self.assertNotIn("right", text)
+
+    def test_listener_sees_numbered_cells(self) -> None:
+        from world import Cell, describe_candidates
+        text = describe_candidates([Cell(1, 0), Cell(-3, 3)])
+        grid = text.splitlines()[1:]
+        self.assertEqual(grid[3].split()[4], "1")
+        self.assertEqual(grid[0].split()[0], "2")
+
+    def test_levels_1_2_text_unchanged(self) -> None:
+        from world import describe_candidates, describe_target
+        self.assertEqual(describe_target(make_objects(2)[0]), "red circle")
+        self.assertEqual(describe_candidates(make_objects(1)[:2]), "1. red\n2. blue")
+
+
 if __name__ == "__main__":
     unittest.main()
